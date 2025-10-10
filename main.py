@@ -10,7 +10,7 @@ import exchange_calendars as ecals
 STOCK_LIST = [
     {"code": "600900", "name": "长江电力"},
     {"code": "601336", "name": "新华保险"},
-    {"code": "603586", "name": "森麒麟"}
+    {"code": "601288", "name": "农业银行"}
 ]
 
 # 初始化上交所交易日历
