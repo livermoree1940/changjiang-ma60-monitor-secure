@@ -74,7 +74,8 @@ def main():
 
         if not prev['above'] and latest['above']:
             print(f"✅ {name} 今日新站上60日线，生成买入信号。")
-            chart_file = f"ma60_{code}.png"
+            # 修改文件名为中文名 + 股票代码
+            chart_file = f"{name}_{code}.png"
             plot_stock_ma60(df, name, chart_file)
 
             msg = f"""【买入信号】{name} 站上60日线
@@ -87,7 +88,6 @@ def main():
             send_email_if_signal(msg, chart_file)
         else:
             print(f"{name} 未触发买入信号。")
-
 # ----------------- 执行 -----------------
 if __name__ == "__main__":
     main()
