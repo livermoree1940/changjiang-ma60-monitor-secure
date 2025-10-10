@@ -6,4 +6,4 @@ yagmail       # 可选，如果 utils_email 使用 yagmail
 email-validator  # 可选
 
 # 交易日判断
-trade-calendar  # 如果 is_trade_day() 依赖
+exchange_calendars  # 如果 is_trade_day() 依赖
