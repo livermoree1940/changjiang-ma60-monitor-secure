@@ -1,102 +1,45 @@
-import pandas as pd
-from datetime import datetime
-import matplotlib.pyplot as plt
-import adata
-from utils_email import send_email_if_signal
-import exchange_calendars as ecals
+import smtplib
+import os
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 
-STOCK_LIST = [
-    {"code": "600519", "name": "贵州茅台"},
-    {"code": "601318", "name": "中国平安"},
-]
+def send_email_if_signal(message, image_path=None):
+    sender = os.getenv("QQ_EMAIL")
+    password = os.getenv("AUTH_CODE")
+    receiver = os.getenv("RECEIVER")
 
-ETF_LIST = [
-    {"code": "515080", "name": "华夏上证50ETF"},
-    {"code": "515450", "name": "标普500ETF"},
-]
+    print(f"邮件配置检查 - 发件人: {sender}, 收件人: {receiver}")
 
-XSHG = ecals.get_calendar("XSHG")
+    if not sender or not password or not receiver:
+        print("❌ 缺少邮件环境变量（QQ_EMAIL / AUTH_CODE / RECEIVER）")
+        print(f"当前环境变量 - QQ_EMAIL: {'已设置' if sender else '未设置'}, AUTH_CODE: {'已设置' if password else '未设置'}, RECEIVER: {'已设置' if receiver else '未设置'}")
+        return False
 
-def is_trade_day():
-    today = pd.Timestamp(datetime.now().date())
-    return today in XSHG.sessions_in_range(today, today)
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = receiver
+    msg["Subject"] = "【股票买入信号提醒】"
 
-def get_stock_data(stock_code, days=120):
-    df = adata.stock.market.get_market(stock_code=stock_code, k_type=1, adjust_type=1)
-    if df is None or df.empty or len(df) < 20:
-        return None
-    for col in ["close", "open", "high", "low", "volume", "amount"]:
-        df[col] = df[col].astype(float)
-    df["trade_date"] = pd.to_datetime(df["trade_date"])
-    df = df.sort_values("trade_date")
-    df["ma20"] = df["close"].rolling(window=20).mean()
-    df["std"] = df["close"].rolling(window=20).std()
-    df["upper"] = df["ma20"] + 2 * df["std"]
-    df["lower"] = df["ma20"] - 2 * df["std"]
-    return df.tail(days)
+    msg.attach(MIMEText(message, "plain", "utf-8"))
 
-def get_etf_data(etf_code, days=120):
-    df = adata.fund.market.get_market_etf(fund_code=etf_code, k_type=1)
-    if df is None or df.empty or len(df) < 20:
-        return None
-    for col in ["close", "open", "high", "low", "volume", "amount"]:
-        df[col] = df[col].astype(float)
-    df["trade_date"] = pd.to_datetime(df["trade_date"])
-    df = df.sort_values("trade_date")
-    df["ma20"] = df["close"].rolling(window=20).mean()
-    df["std"] = df["close"].rolling(window=20).std()
-    df["upper"] = df["ma20"] + 2 * df["std"]
-    df["lower"] = df["ma20"] - 2 * df["std"]
-    return df.tail(days)
+    # 如果有图片附件
+    if image_path and os.path.exists(image_path):
+        try:
+            with open(image_path, "rb") as f:
+                img = MIMEApplication(f.read())
+                img.add_header("Content-Disposition", "attachment", filename=os.path.basename(image_path))
+                msg.attach(img)
+            print(f"✅ 成功添加图片附件: {image_path}")
+        except Exception as e:
+            print(f"❌ 添加图片附件失败: {e}")
 
-def plot_boll(df, name, filename):
-    plt.figure(figsize=(15,8))
-    plt.plot(df["trade_date"], df["close"], label="收盘价", linewidth=2)
-    plt.plot(df["trade_date"], df["upper"], label="上轨", linestyle="--")
-    plt.plot(df["trade_date"], df["ma20"], label="中轨", linestyle="--")
-    plt.plot(df["trade_date"], df["lower"], label="下轨", linestyle="--")
-    plt.fill_between(df["trade_date"], df["close"], df["lower"], where=df["close"] < df["lower"], facecolor="red", alpha=0.3)
-    plt.title(f"{name} - 收盘价与BOLL")
-    plt.legend()
-    plt.xticks(rotation=45)
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-    plt.savefig(filename)
-    plt.close()
-
-def run_boll():
-    if not is_trade_day():
-        print("非交易日，跳过 BOLL 执行")
-        return
-
-    # 股票
-    for stock in STOCK_LIST:
-        df = get_stock_data(stock["code"])
-        if df is None:
-            continue
-        latest = df.iloc[-1]
-        if latest["close"] < latest["lower"]:
-            print(f"✅ 股票 {stock['name']} 跌破BOLL下轨，生成买入信号")
-            chart_file = f"{stock['name']}_{stock['code']}.png"
-            plot_boll(df, stock['name'], chart_file)
-            msg = f"""【买入信号】股票 {stock['name']} 跌破BOLL下轨
-检测时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-当前价格：{latest['close']:.2f}
-BOLL下轨：{latest['lower']:.2f}"""
-            send_email_if_signal(msg, chart_file)
-
-    # ETF
-    for etf in ETF_LIST:
-        df = get_etf_data(etf["code"])
-        if df is None:
-            continue
-        latest = df.iloc[-1]
-        if latest["close"] < latest["lower"]:
-            print(f"✅ ETF {etf['name']} 跌破BOLL下轨，生成买入信号")
-            chart_file = f"{etf['name']}_{etf['code']}.png"
-            plot_boll(df, etf['name'], chart_file)
-            msg = f"""【买入信号】ETF {etf['name']} 跌破BOLL下轨
-检测时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-当前价格：{latest['close']:.2f}
-BOLL下轨：{latest['lower']:.2f}"""
-            send_email_if_signal(msg, chart_file)
+    try:
+        with smtplib.SMTP_SSL("smtp.qq.com", 465) as server:
+            server.login(sender, password)
+            server.send_message(msg)
+        print("📩 邮件发送成功！")
+        return True
+    except Exception as e:
+        print(f"❌ 邮件发送失败：{e}")
+        return False
