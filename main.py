@@ -6,7 +6,7 @@ from datetime import datetime
 from utils_email import send_email_if_signal
 from trade_calendar import is_trade_day
 
-STOCK_CODE = "601336.XSHG"  # 长江电力
+STOCK_CODE = "600177.XSHG"  # 长江电力
 STOCK_NAME = "长江电力"
 
 def get_stock_data(stock_code, days=120):
