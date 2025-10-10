@@ -5,6 +5,7 @@ from datetime import datetime
 from utils_email import send_email_if_signal
 import adata
 import exchange_calendars as ecals
+from random import randint
 
 # ----------------- 配置 -----------------
 STOCK_LIST = [
@@ -34,7 +35,6 @@ def get_stock_data(stock_code, days=120):
         print(f"无法获取股票 {stock_code} 数据")
         return None
 
-    # 转换为数值类型
     for col in ["close", "open", "high", "low", "volume", "amount"]:
         df[col] = df[col].astype(float)
 
@@ -51,7 +51,6 @@ def get_etf_data(etf_code, days=120):
         print(f"无法获取ETF {etf_code} 数据")
         return None
 
-    # 转换为数值类型
     for col in ["close", "open", "high", "low", "volume", "amount"]:
         df[col] = df[col].astype(float)
 
@@ -95,12 +94,29 @@ def plot_ma60(df, name, filename):
 
 
 # ----------------- 主逻辑 -----------------
+def send_signal(name, code, df, signal_type="股票"):
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    rand_suffix = randint(1000, 9999)
+    chart_file = f"{name}_{code}_{timestamp}_{rand_suffix}.png"
+
+    plot_ma60(df, name, chart_file)
+
+    latest = df.iloc[-1]
+    msg = f"""【买入信号】{signal_type} {name} 站上60日线
+检测时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+当前价格：{latest['close']:.2f}
+60日均线：{latest['ma60']:.2f}
+状态：✅ 站上60日线
+"""
+    send_email_if_signal(msg, chart_file)
+
+
 def main():
     if not is_trade_day():
         print("非交易日，跳过执行。")
         return
 
-    # 先遍历股票
+    # 遍历股票
     for stock in STOCK_LIST:
         code = stock["code"]
         name = stock["name"]
@@ -113,20 +129,11 @@ def main():
 
         if not prev["above"] and latest["above"]:
             print(f"✅ 股票 {name} 今日站上60日线，生成买入信号。")
-            chart_file = f"{name}_{code}.png"
-            plot_ma60(df, name, chart_file)
-
-            msg = f"""【买入信号】股票 {name} 站上60日线
-检测时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-当前价格：{latest['close']:.2f}
-60日均线：{latest['ma60']:.2f}
-状态：✅ 站上60日线
-"""
-            send_email_if_signal(msg, chart_file)
+            send_signal(name, code, df, signal_type="股票")
         else:
             print(f"股票 {name} 未触发买入信号。")
 
-    # 再遍历ETF
+    # 遍历ETF
     for etf in ETF_LIST:
         code = etf["code"]
         name = etf["name"]
@@ -139,16 +146,7 @@ def main():
 
         if not prev["above"] and latest["above"]:
             print(f"✅ ETF {name} 今日站上60日线，生成买入信号。")
-            chart_file = f"{name}_{code}.png"
-            plot_ma60(df, name, chart_file)
-
-            msg = f"""【买入信号】ETF {name} 站上60日线
-检测时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-当前价格：{latest['close']:.2f}
-60日均线：{latest['ma60']:.2f}
-状态：✅ 站上60日线
-"""
-            send_email_if_signal(msg, chart_file)
+            send_signal(name, code, df, signal_type="ETF")
         else:
             print(f"ETF {name} 未触发买入信号。")
 
