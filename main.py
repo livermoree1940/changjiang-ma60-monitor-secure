@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
 from utils_email import send_email_if_signal
-from trade_calendar import is_trade_day
+from exchange_calendars import is_trade_day
 import adata  # 使用 adata 获取行情数据
 
 STOCK_CODE = "601336"  # 长江电力
