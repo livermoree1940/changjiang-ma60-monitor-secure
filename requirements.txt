@@ -1,9 +1,9 @@
-pandas>=1.5.0
-matplotlib>=3.7.0
-adata>=0.1.0          # 用于获取股票行情数据（确保安装最新版本）
+pandas
+matplotlib
+adata          # 用于获取股票行情数据（确保安装最新版本）
 # 邮件发送相关（utils_email 内可能依赖 smtplib 或第三方库）
-yagmail>=0.15.0       # 可选，如果 utils_email 使用 yagmail
-email-validator>=1.3  # 可选
+yagmail       # 可选，如果 utils_email 使用 yagmail
+email-validator  # 可选
 
 # 交易日判断
-trade-calendar>=0.5.2  # 如果 is_trade_day() 依赖
+trade-calendar  # 如果 is_trade_day() 依赖
