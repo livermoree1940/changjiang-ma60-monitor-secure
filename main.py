@@ -5,38 +5,28 @@ from datetime import datetime
 from utils_email import send_email_if_signal
 import adata  # 获取股票行情数据
 import exchange_calendars as ecals
-import matplotlib as mpl
 
-# 设置中文字体
-plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']  # 用来正常显示中文标签
-plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
-
-# 强化字体配置（放在所有其他导入之后）
-mpl.rcParams['font.sans-serif'] = ['SimHei']  # 仅保留Windows字体
-mpl.rcParams['axes.unicode_minus'] = False
-mpl.use('Agg')  # 必须在其他matplotlib操作之前设置
-
-# 修改字体配置部分（移除中文字体设置）
-import matplotlib.pyplot as plt
-plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']  # 跨平台兼容字体
-plt.rcParams['axes.unicode_minus'] = False
-
-def plot_stock_ma60(df, stock_name, filename):
-    """绘制股票收盘价与60日均线"""
-    plt.figure(figsize=(15, 8))
-    plt.plot(df['trade_date'], df['close'], label='Close', linewidth=2)
-    plt.plot(df['trade_date'], df['ma60'], label='60MA', linestyle='--', linewidth=2)
-    above_mask = df['above']
-    plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=above_mask, facecolor='green', alpha=0.3)
-    plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=~above_mask, facecolor='red', alpha=0.3)
-    plt.title(f"{stock_name} - Price and 60-day Moving Average", fontsize=16)
-    plt.legend()
-    plt.xticks(rotation=45)
-    plt.grid(True, linestyle='--', alpha=0.6)
-    plt.title(f'{stock_name} MA60 Monitor', fontsize=14)  # 英文标题避免中文
-    plt.tight_layout()
-    plt.savefig(filename)
-    plt.close()
+# ----------------- 配置 -----------------
+STOCK_LIST = [
+    {"code": "600900", "name": "长江电力"},
+    {"code": "601336", "name": "新华保险"},
+    {"code": "601728", "name": "中国电信"},
+    {"code": "600030", "name": "中信证券"},
+    {"code": "600028", "name": "中国石化"},
+    {"code": "601288", "name": "农业银行"}
+]
+# STOCK_LIST = [
+#     {"code": "600900", "name": "长江电力", "type": "stock"},
+#     {"code": "601336", "name": "新华保险", "type": "stock"},
+#     {"code": "601728", "name": "中国电信", "type": "stock"},
+#     {"code": "600030", "name": "中信证券", "type": "stock"},
+#     {"code": "600028", "name": "中国石化", "type": "stock"},
+#     {"code": "563300", "name": "中证2000etf", "type": "etf"},
+#     {"code": "513950", "name": "恒生红利etf", "type": "etf"},
+#     {"code": "510300", "name": "沪深300ETF", "type": "etf"}  # 添加510300 ETF
+# ]
+# 初始化上交所交易日历
+XSHG = ecals.get_calendar("XSHG")
 
 # ----------------- 函数 -----------------
 def is_trade_day():
@@ -44,11 +34,42 @@ def is_trade_day():
     today = pd.Timestamp(datetime.now().date())
     return today in XSHG.sessions_in_range(today, today)
 
+def get_stock_data(stock_code, days=120):
+    """获取股票日K线数据并计算60日均线"""
+    total_days = days + 60
+    df = adata.stock.market.get_market(
+        stock_code=stock_code,
+        k_type=1,       # 日K
+        adjust_type=1   # 前复权
+    )
+    if df is None or df.empty or len(df) < 60:
+        print(f"无法获取股票 {stock_code} 的数据")
+        return None
+
+    df['trade_date'] = pd.to_datetime(df['trade_date'])
+    df = df.sort_values('trade_date')
+    df['ma60'] = df['close'].rolling(window=60, min_periods=1).mean()
+    df['above'] = df['close'] > df['ma60']
+    return df.tail(days)
+
+def plot_stock_ma60(df, stock_name, filename):
+    """绘制股票收盘价与60日均线"""
+    plt.figure(figsize=(15, 8))
+    plt.plot(df['trade_date'], df['close'], label='收盘价', linewidth=2)
+    plt.plot(df['trade_date'], df['ma60'], label='60日均线', linestyle='--', linewidth=2)
+    above_mask = df['above']
+    plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=above_mask, facecolor='green', alpha=0.3)
+    plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=~above_mask, facecolor='red', alpha=0.3)
+    plt.title(f"{stock_name} - 股价与60日均线", fontsize=16)
+    plt.legend()
+    plt.xticks(rotation=45)
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
 # ----------------- 主逻辑 -----------------
 def main():
-    # 在生成图表前添加后端设置
-    import matplotlib
-    matplotlib.use('Agg')  # 非交互式后端
     if not is_trade_day():
         print("非交易日，跳过执行。")
         return
@@ -56,14 +77,7 @@ def main():
     for stock in STOCK_LIST:
         code = stock["code"]
         name = stock["name"]
-        asset_type = stock["type"]
-        
-        # 根据类型选择不同的数据获取函数
-        if asset_type == "etf":
-            df = get_etf_data(code)
-        else:
-            df = get_stock_data(code)
-            
+        df = get_stock_data(code)
         if df is None:
             continue
 
@@ -72,7 +86,7 @@ def main():
 
         if not prev['above'] and latest['above']:
             print(f"✅ {name} 今日新站上60日线，生成买入信号。")
-            # 修改文件名为中文名 + 代码
+            # 修改文件名为中文名 + 股票代码
             chart_file = f"{name}_{code}.png"
             plot_stock_ma60(df, name, chart_file)
 
