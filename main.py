@@ -5,10 +5,16 @@ from datetime import datetime
 from utils_email import send_email_if_signal
 import adata  # 获取股票行情数据
 import exchange_calendars as ecals
+import matplotlib as mpl
 
 # 设置中文字体
 plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']  # 用来正常显示中文标签
 plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+
+# 强化字体配置（放在所有其他导入之后）
+mpl.rcParams['font.sans-serif'] = ['SimHei']  # 仅保留Windows字体
+mpl.rcParams['axes.unicode_minus'] = False
+mpl.use('Agg')  # 必须在其他matplotlib操作之前设置
 
 # ----------------- 配置 -----------------
 STOCK_LIST = [
@@ -51,28 +57,33 @@ def get_stock_data(stock_code, days=120):
 
 def get_etf_data(code):
     try:
-        adata.set_config()
+        # 移除不存在的 set_config() 调用
         df = adata.fund.market.get_market_etf(
             fund_code=code,
             k_type=1,
             start_date="20230101",
             end_date=datetime.now().strftime("%Y%m%d")
         )
-        # 添加数据验证
-        if df.empty or 'close' not in df.columns:
-            raise ValueError("Invalid ETF data returned")
-        return df
+        # 增强数据校验
+        if df.empty or not {'close', 'trade_time'}.issubset(df.columns):
+            print(f"ETF数据异常: 代码 {code}")
+            return None
+        # 统一日期列名
+        df = df.rename(columns={'trade_time': 'trade_date'})
+        df['trade_date'] = pd.to_datetime(df['trade_date'])
+        df = df.sort_values('trade_date')
+        df['ma60'] = df['close'].rolling(window=60, min_periods=1).mean()
+        df['above'] = df['close'] > df['ma60']
+        return df.tail(120)
     except Exception as e:
         print(f"获取ETF数据失败: {str(e)}")
-        # 添加详细的错误日志
-        print(f"API返回数据格式可能有变化，请检查接口响应")
-        return pd.DataFrame()
+        return None
 
 def plot_stock_ma60(df, stock_name, filename):
     """绘制股票收盘价与60日均线"""
     plt.figure(figsize=(15, 8))
-    plt.plot(df['trade_date'], df['close'], label='Close Price', linewidth=2)
-    plt.plot(df['trade_date'], df['ma60'], label='60-day MA', linestyle='--', linewidth=2)
+    plt.plot(df['trade_date'], df['close'], label='收盘价', linewidth=2)
+    plt.plot(df['trade_date'], df['ma60'], label='60日均线', linestyle='--', linewidth=2)
     above_mask = df['above']
     plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=above_mask, facecolor='green', alpha=0.3)
     plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=~above_mask, facecolor='red', alpha=0.3)
@@ -80,7 +91,7 @@ def plot_stock_ma60(df, stock_name, filename):
     plt.legend()
     plt.xticks(rotation=45)
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.title('长江电力 60日线监控', fontsize=14)  # 确保使用配置的中文字体
+    plt.title(f'{stock_name} 60日线监控', fontsize=14)  # 统一标题格式
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
