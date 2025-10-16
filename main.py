@@ -38,6 +38,12 @@ def plot_stock_ma60(df, stock_name, filename):
     plt.savefig(filename)
     plt.close()
 
+# ----------------- 函数 -----------------
+def is_trade_day():
+    """判断今天是否交易日"""
+    today = pd.Timestamp(datetime.now().date())
+    return today in XSHG.sessions_in_range(today, today)
+
 # ----------------- 主逻辑 -----------------
 def main():
     # 在生成图表前添加后端设置
