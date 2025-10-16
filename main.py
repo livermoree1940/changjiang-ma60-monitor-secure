@@ -6,6 +6,10 @@ from utils_email import send_email_if_signal
 import adata  # 获取股票行情数据
 import exchange_calendars as ecals
 
+# 设置中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei', 'DejaVu Sans']  # 用来正常显示中文标签
+plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+
 # ----------------- 配置 -----------------
 STOCK_LIST = [
     {"code": "600900", "name": "长江电力", "type": "stock"},
@@ -50,8 +54,8 @@ def get_etf_data(etf_code, days=120):
     total_days = days + 60
     df = adata.fund.market.get_market_etf(
         fund_code=etf_code,
-        k_type=1,       # 日K
-        adjust_type=1   # 前复权
+        k_type=1       # 日K
+        # ETF数据获取不需要 adjust_type 参数
     )
     if df is None or df.empty or len(df) < 60:
         print(f"无法获取ETF {etf_code} 的数据")
@@ -64,14 +68,14 @@ def get_etf_data(etf_code, days=120):
     return df.tail(days)
 
 def plot_stock_ma60(df, stock_name, filename):
-    """绘制股票/ETF收盘价与60日均线"""
+    """绘制股票收盘价与60日均线"""
     plt.figure(figsize=(15, 8))
-    plt.plot(df['trade_date'], df['close'], label='收盘价', linewidth=2)
-    plt.plot(df['trade_date'], df['ma60'], label='60日均线', linestyle='--', linewidth=2)
+    plt.plot(df['trade_date'], df['close'], label='Close Price', linewidth=2)
+    plt.plot(df['trade_date'], df['ma60'], label='60-day MA', linestyle='--', linewidth=2)
     above_mask = df['above']
     plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=above_mask, facecolor='green', alpha=0.3)
     plt.fill_between(df['trade_date'], df['close'], df['ma60'], where=~above_mask, facecolor='red', alpha=0.3)
-    plt.title(f"{stock_name} - 价格与60日均线", fontsize=16)
+    plt.title(f"{stock_name} - Price and 60-day Moving Average", fontsize=16)
     plt.legend()
     plt.xticks(rotation=45)
     plt.grid(True, linestyle='--', alpha=0.6)
