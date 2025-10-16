@@ -49,23 +49,24 @@ def get_stock_data(stock_code, days=120):
     df['above'] = df['close'] > df['ma60']
     return df.tail(days)
 
-def get_etf_data(etf_code, days=120):
-    """获取ETF日K线数据并计算60日均线"""
-    total_days = days + 60
-    df = adata.fund.market.get_market_etf(
-        fund_code=etf_code,
-        k_type=1       # 日K
-        # ETF数据获取不需要 adjust_type 参数
-    )
-    if df is None or df.empty or len(df) < 60:
-        print(f"无法获取ETF {etf_code} 的数据")
-        return None
-
-    df['trade_date'] = pd.to_datetime(df['trade_date'])
-    df = df.sort_values('trade_date')
-    df['ma60'] = df['close'].rolling(window=60, min_periods=1).mean()
-    df['above'] = df['close'] > df['ma60']
-    return df.tail(days)
+def get_etf_data(code):
+    try:
+        adata.set_config()
+        df = adata.fund.market.get_market_etf(
+            fund_code=code,
+            k_type=1,
+            start_date="20230101",
+            end_date=datetime.now().strftime("%Y%m%d")
+        )
+        # 添加数据验证
+        if df.empty or 'close' not in df.columns:
+            raise ValueError("Invalid ETF data returned")
+        return df
+    except Exception as e:
+        print(f"获取ETF数据失败: {str(e)}")
+        # 添加详细的错误日志
+        print(f"API返回数据格式可能有变化，请检查接口响应")
+        return pd.DataFrame()
 
 def plot_stock_ma60(df, stock_name, filename):
     """绘制股票收盘价与60日均线"""
@@ -79,12 +80,16 @@ def plot_stock_ma60(df, stock_name, filename):
     plt.legend()
     plt.xticks(rotation=45)
     plt.grid(True, linestyle='--', alpha=0.6)
+    plt.title('长江电力 60日线监控', fontsize=14)  # 确保使用配置的中文字体
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
 
 # ----------------- 主逻辑 -----------------
 def main():
+    # 在生成图表前添加后端设置
+    import matplotlib
+    matplotlib.use('Agg')  # 非交互式后端
     if not is_trade_day():
         print("非交易日，跳过执行。")
         return
